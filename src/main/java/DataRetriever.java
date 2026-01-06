@@ -1,7 +1,4 @@
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -72,18 +69,18 @@ public class DataRetriever {
 
         try (PreparedStatement preparedStatement = connection.prepareStatement(
                 """
-                SELECT
-                    ingredient.id,
-                    ingredient.name,
-                    ingredient.price,
-                    ingredient.category,
-                    dish.id AS dish_id,
-                    dish.name AS dish_name,
-                    dish.dish_type
-                FROM ingredient
-                JOIN dish ON ingredient.id_dish = dish.id
-                LIMIT ? OFFSET ?
-                """
+                        SELECT
+                            ingredient.id,
+                            ingredient.name,
+                            ingredient.price,
+                            ingredient.category,
+                            dish.id AS dish_id,
+                            dish.name AS dish_name,
+                            dish.dish_type
+                        FROM ingredient
+                        JOIN dish ON ingredient.id_dish = dish.id
+                        LIMIT ? OFFSET ?
+                        """
         )) {
             preparedStatement.setInt(1, size);
             preparedStatement.setInt(2, (page - 1) * size);
@@ -110,5 +107,65 @@ public class DataRetriever {
         return ingredients;
     }
 
+    public List<Ingredient> createIngredients(List<Ingredient> newIngredients) {
+        DBConnection dbConnection = new DBConnection();
+        Connection connection = dbConnection.getDBConnection();
 
+        try {
+            // Début de la transaction
+            connection.setAutoCommit(false);
+
+            String checkQuery = "SELECT id FROM ingredient WHERE name = ?";
+            String insertQuery = """
+                    INSERT INTO ingredient(name, price, category, id_dish)
+                    VALUES (?, ?, ?::ingredient_category, ?)
+                    """;
+
+            try (PreparedStatement checkStmt = connection.prepareStatement(checkQuery);
+                 PreparedStatement insertStmt = connection.prepareStatement(insertQuery)) {
+
+                for (Ingredient ingredient : newIngredients) {
+
+                    // Vérification d'existence
+                    checkStmt.setString(1, ingredient.getName());
+                    ResultSet rs = checkStmt.executeQuery();
+                    if (rs.next()) {
+                        throw new RuntimeException(
+                                "Ingredient already exists: " + ingredient.getName()
+                        );
+                    }
+
+                    // Insertion
+                    insertStmt.setString(1, ingredient.getName());
+                    insertStmt.setDouble(2, ingredient.getPrice());
+                    insertStmt.setString(3, ingredient.getCategory().name());
+
+                    if (ingredient.getDish() != null) {
+                        insertStmt.setInt(4, ingredient.getDish().getId());
+                    } else {
+                        insertStmt.setNull(4, Types.INTEGER);
+                    }
+
+                    insertStmt.executeUpdate();
+                }
+            }
+            connection.commit();
+            return newIngredients;
+
+        } catch (Exception e) {
+            try {
+                connection.rollback();
+            } catch (SQLException ex) {
+                throw new RuntimeException(ex);
+            }
+            throw new RuntimeException(e);
+
+        } finally {
+            try {
+                connection.setAutoCommit(true);
+            } catch (SQLException ignored) {
+            }
+            dbConnection.close(connection);
+        }
+    }
 }
