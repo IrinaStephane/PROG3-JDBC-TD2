@@ -1,4 +1,5 @@
 import java.util.List;
+import java.util.Objects;
 
 public class Dish {
     private int id;
@@ -41,14 +42,23 @@ public class Dish {
         return ingredients;
     }
 
-    public Double getDishPrice() {
-        return ingredients.stream()
-                .mapToDouble(Ingredient::getPrice)
-                .sum();
-    }
-
     public void setIngredients(List<Ingredient> ingredients) {
         this.ingredients = ingredients;
+    }
+
+    public Double getDishCost () {
+        return this.ingredients.stream().mapToDouble(Ingredient::getPrice).sum();
+    }
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        Dish dish = (Dish) o;
+        return id == dish.id && Objects.equals(name, dish.name) && dishType == dish.dishType && Objects.equals(ingredients, dish.ingredients);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, name, dishType, ingredients);
     }
 
     @Override
@@ -57,7 +67,7 @@ public class Dish {
                 "id=" + id +
                 ", name='" + name + '\'' +
                 ", dishType=" + dishType +
-                ", ingredients=" + ingredients +
+                ", ingredients=" + getIngredients() +
                 '}';
     }
 }
