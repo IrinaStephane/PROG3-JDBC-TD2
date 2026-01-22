@@ -8,9 +8,7 @@ create table dish_ingredient
     quantity_required numeric(10, 2),
     unit              unit_type
 );
-ALTER TABLE ingredient
-DROP COLUMN IF EXISTS id_dish,
-DROP COLUMN IF EXISTS required_quantity;
+ALTER TABLE ingredient DROP COLUMN IF EXISTS id_dish;
 
 insert into dish_ingredient (id, id_dish, id_ingredient, quantity_required, unit)
 values (1, 1, 1, 0.20, 'KG'),
