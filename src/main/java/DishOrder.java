@@ -1,33 +1,16 @@
 import java.util.Objects;
 
 public class DishOrder {
-    private int id;
+    private Integer id;
     private Dish dish;
-    private int quantity;
+    private Integer quantity;
 
-    public DishOrder(int id, Dish dish, int quantity) {
-        this.id = id;
-        this.dish = dish;
-        this.quantity = quantity;
-    }
-
-    public DishOrder() {
-    }
-
-    public int getId() {
+    public Integer getId() {
         return id;
     }
 
-    public void setId(int id) {
+    public void setId(Integer id) {
         this.id = id;
-    }
-
-    public int getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(int quantity) {
-        this.quantity = quantity;
     }
 
     public Dish getDish() {
@@ -38,11 +21,19 @@ public class DishOrder {
         this.dish = dish;
     }
 
+    public Integer getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(Integer quantity) {
+        this.quantity = quantity;
+    }
+
+
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
-        DishOrder dishOrder = (DishOrder) o;
-        return id == dishOrder.id && quantity == dishOrder.quantity && Objects.equals(dish, dishOrder.dish);
+        if (!(o instanceof DishOrder dishOrder)) return false;
+        return Objects.equals(id, dishOrder.id) && Objects.equals(dish, dishOrder.dish) && Objects.equals(quantity, dishOrder.quantity);
     }
 
     @Override

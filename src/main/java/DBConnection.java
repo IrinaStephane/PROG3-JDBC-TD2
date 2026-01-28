@@ -13,7 +13,7 @@ public class DBConnection {
         this.password = System.getenv("DB_PASSWORD");
     }
 
-    public Connection getDBConnection(){
+    public Connection getConnection(){
         try {
             return DriverManager.getConnection(url,username, password);
         } catch (SQLException e) {
@@ -21,7 +21,7 @@ public class DBConnection {
         }
     }
 
-    public void close(Connection connection) {
+    public void closeConnection(Connection connection) {
         if (connection != null) {
             try {
                 connection.close();
