@@ -490,4 +490,233 @@ public class DataRetriever {
             throw new RuntimeException("Erreur lors de la sauvegarde : " + e.getMessage());
         }
     }
+
+    public StockValue getStockValueAt(Instant t, Integer ingredientId) {
+
+        String sql = """
+        SELECT unit,
+               SUM(
+                   CASE
+                       WHEN type = 'IN' THEN quantity
+                       WHEN type = 'OUT' THEN -quantity
+                       ELSE 0
+                   END
+               ) AS actual_quantity
+        FROM stock_movement
+        WHERE id_ingredient = ?
+          AND creation_datetime <= ?
+        GROUP BY unit
+        """;
+
+        try (Connection conn = new DBConnection().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, ingredientId);
+            ps.setTimestamp(2, Timestamp.from(t));
+
+            try (ResultSet rs = ps.executeQuery()) {
+
+                StockValue stockValue = null;
+                int unitCount = 0;
+
+                while (rs.next()) {
+                    unitCount++;
+
+                    if (unitCount > 1) {
+                        throw new RuntimeException(
+                                "Multiple units found for ingredient " + ingredientId +
+                                        ". Conversion not handled in SQL method."
+                        );
+                    }
+
+                    Unit unit = Unit.valueOf(rs.getString("unit"));
+                    Double quantity = rs.getDouble("actual_quantity");
+
+                    stockValue = new StockValue();
+                    stockValue.setUnit(unit);
+                    stockValue.setQuantity(quantity);
+                }
+
+                if (stockValue == null) {
+                    StockValue empty = new StockValue();
+                    empty.setQuantity(0.0);
+                    empty.setUnit(null);
+                    return empty;
+                }
+
+                return stockValue;
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Double getDishCost(Integer dishId) {
+
+        String sql = """
+        SELECT SUM(i.price * di.required_quantity) AS total_cost
+        FROM dish_ingredient di
+        JOIN ingredient i ON di.id_ingredient = i.id
+        WHERE di.id_dish = ?
+        """;
+
+        try (Connection conn = new DBConnection().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, dishId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+
+                if (rs.next()) {
+                    Double cost = rs.getDouble("total_cost");
+
+                    if (rs.wasNull()) {
+                        return null;
+                    }
+
+                    return cost;
+                }
+
+                return null;
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Double getGrossMargin(Integer dishId) {
+
+        String sql = """
+        SELECT d.selling_price - COALESCE(SUM(i.price * di.required_quantity), 0) AS gross_margin
+        FROM dish d
+        LEFT JOIN dish_ingredient di ON d.id = di.id_dish
+        LEFT JOIN ingredient i ON di.id_ingredient = i.id
+        WHERE d.id = ?
+        GROUP BY d.selling_price
+        """;
+
+        try (Connection conn = new DBConnection().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, dishId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+
+                if (rs.next()) {
+
+                    Double margin = rs.getDouble("gross_margin");
+
+                    if (rs.wasNull()) {
+                        return null;
+                    }
+
+                    return margin;
+                }
+
+                return null;
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static class StockPoint {
+        private Instant date;
+        private Double quantity;
+
+        public StockPoint(Instant date, Double quantity) {
+            this.date = date;
+            this.quantity = quantity;
+        }
+
+        @Override
+        public String toString() {
+            return "StockPoint{" +
+                    "date=" + date +
+                    ", quantity=" + quantity +
+                    '}';
+        }
+    }
+
+    public List<StockPoint> getStockEvolution(
+            Integer ingredientId,
+            Instant from,
+            Instant to,
+            String period
+    ) {
+
+        String interval;
+        String trunc;
+
+        switch (period.toUpperCase()) {
+            case "WEEK" -> {
+                interval = "1 week";
+                trunc = "week";
+            }
+            case "MONTH" -> {
+                interval = "1 month";
+                trunc = "month";
+            }
+            default -> {
+                interval = "1 day";
+                trunc = "day";
+            }
+        }
+
+        String sql = """
+        WITH series AS (
+            SELECT generate_series(
+                date_trunc(?, ?::timestamp),
+                date_trunc(?, ?::timestamp),
+                ?::interval
+            ) AS dt
+        )
+        SELECT s.dt,
+               (
+                   SELECT COALESCE(SUM(
+                       CASE
+                           WHEN type = 'IN' THEN quantity
+                           WHEN type = 'OUT' THEN -quantity
+                       END
+                   ), 0)
+                   FROM stock_movement sm
+                   WHERE sm.id_ingredient = ?
+                     AND sm.creation_datetime <= s.dt
+               ) AS quantity
+        FROM series s
+        ORDER BY s.dt
+        """;
+
+        try (Connection conn = new DBConnection().getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, trunc);
+            ps.setTimestamp(2, Timestamp.from(from));
+            ps.setString(3, trunc);
+            ps.setTimestamp(4, Timestamp.from(to));
+            ps.setString(5, interval);
+            ps.setInt(6, ingredientId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+
+                List<StockPoint> result = new ArrayList<>();
+
+                while (rs.next()) {
+                    Instant date = rs.getTimestamp("dt").toInstant();
+                    Double qty = rs.getDouble("quantity");
+                    result.add(new StockPoint(date, qty));
+                }
+
+                return result;
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
 }
